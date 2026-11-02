@@ -1,4 +1,3 @@
-   MEAN JS
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -8,91 +7,108 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Connect MongoDB
-mongoose.connect('mongodb://localhost:27017/')
+// MongoDB Connection
+mongoose.connect('mongodb://localhost:27017/BookstoreDB')
 .then(() => console.log("MongoDB Connected"))
 .catch(err => console.log(err));
 
-// Employee Schema 
-const employeeSchema = new mongoose.Schema({
-    name: String,
-    email: String,
-    department: String
+// Book Schema
+const bookSchema = new mongoose.Schema({
+    title: String,
+    author: String,
+    price: Number
 });
 
-const Employee = mongoose.model('Employee', employeeSchema);
+// Book Collection
+const Book = mongoose.model('Book', bookSchema, 'books');
 
-// GET - Retrieve employees
-app.get('/employees', async (req, res) => {
-    const employees = await Employee.find();
-    res.json(employees);
-});
-
-// DELETE - Remove employee by ID
-app.delete('/employees/:id', async (req, res) => {
+// GET - Retrieve all books
+app.get('/books', async (req, res) => {
     try {
-        const result = await Employee.findByIdAndDelete(req.params.id);
+        const books = await Book.find();
 
-        if (!result) {
+        res.json(books);
+
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// PUT - Update book details using ID
+app.put('/books/:id', async (req, res) => {
+    try {
+        const updatedBook = await Book.findByIdAndUpdate(
+            req.params.id,
+            {
+                title: req.body.title,
+                author: req.body.author,
+                price: req.body.price
+            },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedBook) {
             return res.status(404).json({
-                message: "Employee not found"
+                message: "Book Not Found"
             });
         }
 
         res.json({
-            message: "Employee Deleted Successfully"
+            message: "Book Updated Successfully",
+            book: updatedBook
         });
 
     } catch (error) {
-        res.status(400).json({
-            message: "Invalid Employee ID"
-        });
+        res.status(400).json({ message: error.message });
     }
 });
 
-// Start server
+// Start Server
 app.listen(3000, () => {
     console.log("Server running on port 3000");
 });
 
-HTML 
+
+
+
+HTML
 <!DOCTYPE html>
-<html ng-app="employeeApp">
+<html ng-app="bookApp">
 
 <head>
-    <title>Employee Management</title>
+    <title>Bookstore Inventory</title>
 
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
 </head>
 
-<body ng-controller="employeeCtrl">
+<body ng-controller="bookCtrl">
 
-    <h2>Employee Management System</h2>
+    <h2>Bookstore Inventory Management</h2>
 
-    <button ng-click="getEmployees()">
-        Load Employees
-    </button>
+    <h3>Book List</h3>
+
+    <button ng-click="getBooks()">Load Books</button>
 
     <table border="1" cellpadding="10">
 
         <tr>
-            <th>Name</th>
-            <th>Email</th>
-            <th>Department</th>
+            <th>Book ID</th>
+            <th>Title</th>
+            <th>Author</th>
+            <th>Price</th>
             <th>Action</th>
         </tr>
 
-        <tr ng-repeat="emp in employees">
+        <tr ng-repeat="book in books">
 
-            <td>{{emp.name}}</td>
-
-            <td>{{emp.email}}</td>
-
-            <td>{{emp.department}}</td>
+            <td>{{book._id}}</td>
+            <td>{{book.title}}</td>
+            <td>{{book.author}}</td>
+            <td>{{book.price}}</td>
 
             <td>
-                <button ng-click="deleteEmployee(emp._id)">
-                    Delete
+                <button ng-click="editBook(book)">
+                    Edit
                 </button>
             </td>
 
@@ -100,42 +116,85 @@ HTML
 
     </table>
 
+    <hr>
+
+    <h3>Update Book Details</h3>
+
+    Book ID:
+    <input type="text" ng-model="selectedBook._id" readonly>
+    <br><br>
+
+    Title:
+    <input type="text" ng-model="selectedBook.title">
+    <br><br>
+
+    Author:
+    <input type="text" ng-model="selectedBook.author">
+    <br><br>
+
+    Price:
+    <input type="number" ng-model="selectedBook.price">
+    <br><br>
+
+    <button ng-click="updateBook()">
+        Update Book
+    </button>
+
     <script>
 
-    var app = angular.module('employeeApp', []);
+    var app = angular.module('bookApp', []);
 
-    app.controller('employeeCtrl', function($scope, $http) {
+    app.controller('bookCtrl', function($scope, $http) {
 
-        $scope.employees = [];
+        $scope.books = [];
 
-        // GET employees
-        $scope.getEmployees = function() {
+        // GET - Display all books
+        $scope.getBooks = function() {
 
-            $http.get('mongodb://localhost:27017/')
+            $http.get('http://localhost:3000/books')
             .then(function(response) {
 
-                $scope.employees = response.data;
+                $scope.books = response.data;
 
             });
 
         };
 
-        // DELETE employee 
-        $scope.deleteEmployee = function(id) {
+        // Select book for editing
+        $scope.editBook = function(book) {
 
-            $http.delete('mongodb://localhost:27017/' + id)
+            $scope.selectedBook = angular.copy(book);
+
+        };
+
+        // PUT - Update book
+        $scope.updateBook = function() {
+
+            var id = $scope.selectedBook._id;
+
+            $http.put(
+                'http://localhost:3000/books/' + id,
+                $scope.selectedBook
+            )
             .then(function(response) {
 
-                alert(response.data.message);
+                alert("Book Updated Successfully");
 
-                $scope.getEmployees();
+                $scope.selectedBook = {};
+
+                $scope.getBooks();
+
+            })
+            .catch(function(error) {
+
+                alert("Error Updating Book");
 
             });
 
         };
 
-        // Load employees initially
-        $scope.getEmployees();
+        // Load books initially
+        $scope.getBooks();
 
     });
 
