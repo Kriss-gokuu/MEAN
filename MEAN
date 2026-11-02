@@ -1,0 +1,145 @@
+   MEAN JS
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+// Connect MongoDB
+mongoose.connect('mongodb://localhost:27017/')
+.then(() => console.log("MongoDB Connected"))
+.catch(err => console.log(err));
+
+// Employee Schema 
+const employeeSchema = new mongoose.Schema({
+    name: String,
+    email: String,
+    department: String
+});
+
+const Employee = mongoose.model('Employee', employeeSchema);
+
+// GET - Retrieve employees
+app.get('/employees', async (req, res) => {
+    const employees = await Employee.find();
+    res.json(employees);
+});
+
+// DELETE - Remove employee by ID
+app.delete('/employees/:id', async (req, res) => {
+    try {
+        const result = await Employee.findByIdAndDelete(req.params.id);
+
+        if (!result) {
+            return res.status(404).json({
+                message: "Employee not found"
+            });
+        }
+
+        res.json({
+            message: "Employee Deleted Successfully"
+        });
+
+    } catch (error) {
+        res.status(400).json({
+            message: "Invalid Employee ID"
+        });
+    }
+});
+
+// Start server
+app.listen(3000, () => {
+    console.log("Server running on port 3000");
+});
+
+HTML 
+<!DOCTYPE html>
+<html ng-app="employeeApp">
+
+<head>
+    <title>Employee Management</title>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+</head>
+
+<body ng-controller="employeeCtrl">
+
+    <h2>Employee Management System</h2>
+
+    <button ng-click="getEmployees()">
+        Load Employees
+    </button>
+
+    <table border="1" cellpadding="10">
+
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Department</th>
+            <th>Action</th>
+        </tr>
+
+        <tr ng-repeat="emp in employees">
+
+            <td>{{emp.name}}</td>
+
+            <td>{{emp.email}}</td>
+
+            <td>{{emp.department}}</td>
+
+            <td>
+                <button ng-click="deleteEmployee(emp._id)">
+                    Delete
+                </button>
+            </td>
+
+        </tr>
+
+    </table>
+
+    <script>
+
+    var app = angular.module('employeeApp', []);
+
+    app.controller('employeeCtrl', function($scope, $http) {
+
+        $scope.employees = [];
+
+        // GET employees
+        $scope.getEmployees = function() {
+
+            $http.get('mongodb://localhost:27017/')
+            .then(function(response) {
+
+                $scope.employees = response.data;
+
+            });
+
+        };
+
+        // DELETE employee 
+        $scope.deleteEmployee = function(id) {
+
+            $http.delete('mongodb://localhost:27017/' + id)
+            .then(function(response) {
+
+                alert(response.data.message);
+
+                $scope.getEmployees();
+
+            });
+
+        };
+
+        // Load employees initially
+        $scope.getEmployees();
+
+    });
+
+    </script>
+
+</body>
+</html>
