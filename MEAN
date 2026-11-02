@@ -1,3 +1,4 @@
+MEAN ALL
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -19,10 +20,11 @@ const bookSchema = new mongoose.Schema({
     price: Number
 });
 
-// Book Collection
+// Collection
 const Book = mongoose.model('Book', bookSchema, 'books');
 
-// GET - Retrieve all books
+
+// 1. GET - Display all books
 app.get('/books', async (req, res) => {
     try {
         const books = await Book.find();
@@ -30,38 +32,66 @@ app.get('/books', async (req, res) => {
         res.json(books);
 
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).send(error.message);
     }
 });
 
-// PUT - Update book details using ID
+
+// 2. POST - Add new book
+app.post('/books', async (req, res) => {
+    try {
+        const book = new Book(req.body);
+
+        await book.save();
+
+        res.send("Book Added Successfully");
+
+    } catch (error) {
+        res.status(400).send(error.message);
+    }
+});
+
+
+// 3. PUT - Update book by ID
 app.put('/books/:id', async (req, res) => {
     try {
-        const updatedBook = await Book.findByIdAndUpdate(
+        const book = await Book.findByIdAndUpdate(
             req.params.id,
-            {
-                title: req.body.title,
-                author: req.body.author,
-                price: req.body.price
-            },
+            req.body,
             { new: true, runValidators: true }
         );
 
-        if (!updatedBook) {
-            return res.status(404).json({
-                message: "Book Not Found"
-            });
+        if (!book) {
+            return res.status(404).send("Book Not Found");
         }
 
         res.json({
             message: "Book Updated Successfully",
-            book: updatedBook
+            book: book
         });
 
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        res.status(400).send(error.message);
     }
 });
+
+
+// 4. DELETE - Delete book by ID
+app.delete('/books/:id', async (req, res) => {
+    try {
+        const book = await Book.findByIdAndDelete(req.params.id);
+
+        if (!book) {
+            return res.status(404).send("Book Not Found");
+        }
+
+        res.send("Book Deleted Successfully");
+
+    } catch (error) {
+        res.status(400).send(error.message);
+    }
+});
+
 
 // Start Server
 app.listen(3000, () => {
@@ -69,46 +99,84 @@ app.listen(3000, () => {
 });
 
 
-
-
 HTML
+
 <!DOCTYPE html>
 <html ng-app="bookApp">
 
 <head>
-    <title>Bookstore Inventory</title>
+    <title>Bookstore Management</title>
 
     <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+
 </head>
 
 <body ng-controller="bookCtrl">
 
     <h2>Bookstore Inventory Management</h2>
 
+    <hr>
+
+    <h3>Add / Update Book</h3>
+
+    Title:
+    <input type="text" ng-model="book.title">
+    <br><br>
+
+    Author:
+    <input type="text" ng-model="book.author">
+    <br><br>
+
+    Price:
+    <input type="number" ng-model="book.price">
+    <br><br>
+
+    <button ng-click="addBook()" ng-if="!book._id">
+        Add Book
+    </button>
+
+    <button ng-click="updateBook()" ng-if="book._id">
+        Update Book
+    </button>
+
+    <button ng-click="clearForm()">
+        Clear
+    </button>
+
+    <hr>
+
     <h3>Book List</h3>
 
-    <button ng-click="getBooks()">Load Books</button>
+    <button ng-click="getBooks()">
+        Load Books
+    </button>
+
+    <br><br>
 
     <table border="1" cellpadding="10">
 
         <tr>
-            <th>Book ID</th>
+            <th>ID</th>
             <th>Title</th>
             <th>Author</th>
             <th>Price</th>
             <th>Action</th>
         </tr>
 
-        <tr ng-repeat="book in books">
+        <tr ng-repeat="b in books">
 
-            <td>{{book._id}}</td>
-            <td>{{book.title}}</td>
-            <td>{{book.author}}</td>
-            <td>{{book.price}}</td>
+            <td>{{b._id}}</td>
+            <td>{{b.title}}</td>
+            <td>{{b.author}}</td>
+            <td>{{b.price}}</td>
 
             <td>
-                <button ng-click="editBook(book)">
+                <button ng-click="editBook(b)">
                     Edit
+                </button>
+
+                <button ng-click="deleteBook(b._id)">
+                    Delete
                 </button>
             </td>
 
@@ -116,29 +184,6 @@ HTML
 
     </table>
 
-    <hr>
-
-    <h3>Update Book Details</h3>
-
-    Book ID:
-    <input type="text" ng-model="selectedBook._id" readonly>
-    <br><br>
-
-    Title:
-    <input type="text" ng-model="selectedBook.title">
-    <br><br>
-
-    Author:
-    <input type="text" ng-model="selectedBook.author">
-    <br><br>
-
-    Price:
-    <input type="number" ng-model="selectedBook.price">
-    <br><br>
-
-    <button ng-click="updateBook()">
-        Update Book
-    </button>
 
     <script>
 
@@ -148,10 +193,14 @@ HTML
 
         $scope.books = [];
 
-        // GET - Display all books
+        $scope.book = {};
+
+
+        // GET - Display Books
         $scope.getBooks = function() {
 
             $http.get('http://localhost:3000/books')
+
             .then(function(response) {
 
                 $scope.books = response.data;
@@ -160,40 +209,82 @@ HTML
 
         };
 
-        // Select book for editing
-        $scope.editBook = function(book) {
 
-            $scope.selectedBook = angular.copy(book);
+        // POST - Add Book
+        $scope.addBook = function() {
 
-        };
-
-        // PUT - Update book
-        $scope.updateBook = function() {
-
-            var id = $scope.selectedBook._id;
-
-            $http.put(
-                'http://localhost:3000/books/' + id,
-                $scope.selectedBook
+            $http.post(
+                'http://localhost:3000/books',
+                $scope.book
             )
+
             .then(function(response) {
 
-                alert("Book Updated Successfully");
+                alert("Book Added Successfully");
 
-                $scope.selectedBook = {};
-
+                $scope.clearForm();
                 $scope.getBooks();
-
-            })
-            .catch(function(error) {
-
-                alert("Error Updating Book");
 
             });
 
         };
 
-        // Load books initially
+
+        // Select Book for Update
+        $scope.editBook = function(b) {
+
+            $scope.book = angular.copy(b);
+
+        };
+
+
+        // PUT - Update Book
+        $scope.updateBook = function() {
+
+            $http.put(
+                'http://localhost:3000/books/' + $scope.book._id,
+                $scope.book
+            )
+
+            .then(function(response) {
+
+                alert("Book Updated Successfully");
+
+                $scope.clearForm();
+                $scope.getBooks();
+
+            });
+
+        };
+
+
+        // DELETE - Delete Book
+        $scope.deleteBook = function(id) {
+
+            $http.delete(
+                'http://localhost:3000/books/' + id
+            )
+
+            .then(function(response) {
+
+                alert("Book Deleted Successfully");
+
+                $scope.getBooks();
+
+            });
+
+        };
+
+
+        // Clear Form
+        $scope.clearForm = function() {
+
+            $scope.book = {};
+
+        };
+
+
+        // Load Books Automatically
         $scope.getBooks();
 
     });
