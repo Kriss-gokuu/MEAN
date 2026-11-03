@@ -1,317 +1,146 @@
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 
-# Database connection
-conn = sqlite3.connect("inventory.db")
-cur = conn.cursor()
+win = tk.Tk()
+win.title("Student Management System")
+win.geometry("900x550")
 
-# Create table
+con = sqlite3.connect("student.db")
+cur = con.cursor()
+
 cur.execute("""
-CREATE TABLE IF NOT EXISTS products (
-    product_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    product_code TEXT UNIQUE NOT NULL,
-    product_name TEXT NOT NULL,
-    category TEXT,
-    supplier TEXT,
-    price REAL,
-    stock INTEGER,
-    reorder_level INTEGER
+CREATE TABLE IF NOT EXISTS student(
+    roll INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    age INTEGER,
+    course TEXT
 )
 """)
-
-conn.commit()
-
-# Main window
-root = tk.Tk()
-root.title("Product Inventory Management")
-root.geometry("950x600")
-
-# Heading
-tk.Label(
-    root,
-    text="Product Inventory Management System",
-    font=("Arial", 18, "bold")
-).pack(pady=10)
-
-# Input fields
-fields = [
-    "Product Code",
-    "Product Name",
-    "Category",
-    "Supplier",
-    "Price",
-    "Stock",
-    "Reorder Level"
-]
-
-entries = {}
-
-form = tk.Frame(root)
-form.pack()
-
-for i, field in enumerate(fields):
-
-    tk.Label(form, text=field).grid(
-        row=i, column=0, padx=10, pady=5
-    )
-
-    entry = tk.Entry(form)
-    entry.grid(row=i, column=1, padx=10, pady=5)
-
-    entries[field] = entry
+con.commit()
 
 
-# Get input values
-def get_values():
-
-    return (
-        entries["Product Code"].get(),
-        entries["Product Name"].get(),
-        entries["Category"].get(),
-        entries["Supplier"].get(),
-        float(entries["Price"].get()),
-        int(entries["Stock"].get()),
-        int(entries["Reorder Level"].get())
-    )
-
-
-# Clear fields
 def clear():
-
-    for entry in entries.values():
-        entry.delete(0, tk.END)
-
-
-# Insert product
-def add_product():
-
-    try:
-
-        values = get_values()
-
-        cur.execute("""
-        INSERT INTO products
-        (product_code, product_name, category,
-         supplier, price, stock, reorder_level)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, values)
-
-        conn.commit()
-
-        messagebox.showinfo(
-            "Success",
-            "Product Added Successfully"
-        )
-
-        clear()
-        show_products()
-
-    except sqlite3.IntegrityError:
-        messagebox.showerror(
-            "Error",
-            "Product Code Already Exists"
-        )
-
-    except ValueError:
-        messagebox.showerror(
-            "Error",
-            "Enter Valid Price and Stock Values"
-        )
+    roll_ent.delete(0, tk.END)
+    name_ent.delete(0, tk.END)
+    age_ent.delete(0, tk.END)
+    course_ent.delete(0, tk.END)
 
 
-# Display products
-def show_products():
-
-    for row in table.get_children():
-        table.delete(row)
-
-    cur.execute("SELECT * FROM products")
-
+def show():
+    table.delete(*table.get_children())
+    cur.execute("SELECT * FROM student")
     for row in cur.fetchall():
         table.insert("", tk.END, values=row)
 
 
-# Delete product
-def delete_product():
-
-    selected = table.selection()
-
-    if not selected:
-        messagebox.showwarning(
-            "Warning",
-            "Select a product first"
-        )
+def insert():
+    if not roll_ent.get().strip() or not name_ent.get().strip():
+        messagebox.showerror("Error", "Roll No and Name are required")
         return
+    try:
+        cur.execute(
+            "INSERT INTO student VALUES(?,?,?,?)",
+            (int(roll_ent.get()), name_ent.get(), age_ent.get(), course_ent.get())
+        )
+        con.commit()
+        messagebox.showinfo("Success", "Student inserted successfully")
+        show()
+        clear()
+    except sqlite3.IntegrityError:
+        messagebox.showerror("Error", "Roll number already exists")
+    except ValueError:
+        messagebox.showerror("Error", "Roll No must be a number")
 
-    item = table.item(selected[0])
-    product_id = item["values"][0]
 
+def update():
+    if not roll_ent.get().strip():
+        messagebox.showerror("Error", "Enter Roll No to update")
+        return
     cur.execute(
-        "DELETE FROM products WHERE product_id=?",
-        (product_id,)
+        "UPDATE student SET name=?, age=?, course=? WHERE roll=?",
+        (name_ent.get(), age_ent.get(), course_ent.get(), roll_ent.get())
     )
-
-    conn.commit()
-
-    messagebox.showinfo(
-        "Success",
-        "Product Deleted Successfully"
-    )
-
-    show_products()
+    con.commit()
+    messagebox.showinfo("Success", "Student updated")
+    show()
     clear()
 
 
-# Search product
-def search_product():
+def delete():
+    if not roll_ent.get().strip():
+        messagebox.showerror("Error", "Enter Roll No to delete")
+        return
+    cur.execute("DELETE FROM student WHERE roll=?", (roll_ent.get(),))
+    con.commit()
+    messagebox.showinfo("Success", "Student deleted")
+    show()
+    clear()
 
-    keyword = search_entry.get()
 
-    for row in table.get_children():
-        table.delete(row)
-
-    cur.execute("""
-    SELECT * FROM products
-    WHERE product_code LIKE ?
-    OR product_name LIKE ?
-    """, ('%' + keyword + '%', '%' + keyword + '%'))
-
+def search():
+    table.delete(*table.get_children())
+    cur.execute("SELECT * FROM student WHERE name LIKE ?", ('%' + search_ent.get() + '%',))
     for row in cur.fetchall():
         table.insert("", tk.END, values=row)
 
 
-# Update product
-def update_product():
-
-    selected = table.selection()
-
+def get_data(event):
+    selected = table.focus()
     if not selected:
-        messagebox.showwarning(
-            "Warning",
-            "Select a product first"
-        )
         return
-
-    try:
-
-        values = get_values()
-
-        item = table.item(selected[0])
-        product_id = item["values"][0]
-
-        cur.execute("""
-        UPDATE products SET
-        product_code=?,
-        product_name=?,
-        category=?,
-        supplier=?,
-        price=?,
-        stock=?,
-        reorder_level=?
-        WHERE product_id=?
-        """, values + (product_id,))
-
-        conn.commit()
-
-        messagebox.showinfo(
-            "Success",
-            "Product Updated Successfully"
-        )
-
-        clear()
-        show_products()
-
-    except sqlite3.IntegrityError:
-        messagebox.showerror(
-            "Error",
-            "Product Code Already Exists"
-        )
-
-    except ValueError:
-        messagebox.showerror(
-            "Error",
-            "Enter Valid Numeric Values"
-        )
+    row = table.item(selected)["values"]
+    clear()
+    roll_ent.insert(0, row[0])
+    name_ent.insert(0, row[1])
+    age_ent.insert(0, row[2])
+    course_ent.insert(0, row[3])
 
 
-# Search section
-search_frame = tk.Frame(root)
-search_frame.pack(pady=10)
+tk.Label(win, text="STUDENT MANAGEMENT SYSTEM", font=("Arial", 16, "bold")).pack(pady=10)
 
-tk.Label(
-    search_frame,
-    text="Search Product:"
-).pack(side=tk.LEFT)
+form = tk.Frame(win)
+form.pack(pady=5)
 
-search_entry = tk.Entry(search_frame)
-search_entry.pack(side=tk.LEFT, padx=5)
+tk.Label(form, text="Roll No").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+roll_ent = tk.Entry(form, width=25)
+roll_ent.grid(row=0, column=1, padx=5, pady=5)
 
-tk.Button(
-    search_frame,
-    text="Search",
-    command=search_product
-).pack(side=tk.LEFT)
+tk.Label(form, text="Name").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+name_ent = tk.Entry(form, width=25)
+name_ent.grid(row=1, column=1, padx=5, pady=5)
 
-tk.Button(
-    search_frame,
-    text="Show All",
-    command=show_products
-).pack(side=tk.LEFT, padx=5)
+tk.Label(form, text="Age").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+age_ent = tk.Entry(form, width=25)
+age_ent.grid(row=2, column=1, padx=5, pady=5)
 
+tk.Label(form, text="Course").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+course_ent = tk.Entry(form, width=25)
+course_ent.grid(row=3, column=1, padx=5, pady=5)
 
-# Buttons
-button_frame = tk.Frame(root)
-button_frame.pack(pady=10)
+buttons = tk.Frame(win)
+buttons.pack(pady=8)
+tk.Button(buttons, text="Insert", width=12, command=insert).grid(row=0, column=0, padx=4)
+tk.Button(buttons, text="Update", width=12, command=update).grid(row=0, column=1, padx=4)
+tk.Button(buttons, text="Delete", width=12, command=delete).grid(row=0, column=2, padx=4)
+tk.Button(buttons, text="Clear", width=12, command=clear).grid(row=0, column=3, padx=4)
 
-tk.Button(
-    button_frame,
-    text="Add Product",
-    command=add_product
-).pack(side=tk.LEFT, padx=5)
+search_frame = tk.Frame(win)
+search_frame.pack(pady=5)
+tk.Label(search_frame, text="Search Name").pack(side=tk.LEFT, padx=5)
+search_ent = tk.Entry(search_frame, width=25)
+search_ent.pack(side=tk.LEFT, padx=5)
+tk.Button(search_frame, text="Search", command=search).pack(side=tk.LEFT, padx=4)
+tk.Button(search_frame, text="Show All", command=show).pack(side=tk.LEFT, padx=4)
 
-tk.Button(
-    button_frame,
-    text="Update Product",
-    command=update_product
-).pack(side=tk.LEFT, padx=5)
+table = ttk.Treeview(win, columns=("roll", "name", "age", "course"), show="headings")
+for col, title in zip(("roll", "name", "age", "course"), ("Roll No", "Name", "Age", "Course")):
+    table.heading(col, text=title)
+    table.column(col, width=180, anchor="center")
+table.pack(fill="both", expand=True, padx=15, pady=10)
+table.bind("<Double-1>", get_data)
 
-tk.Button(
-    button_frame,
-    text="Delete Product",
-    command=delete_product
-).pack(side=tk.LEFT, padx=5)
-
-tk.Button(
-    button_frame,
-    text="Clear",
-    command=clear
-).pack(side=tk.LEFT, padx=5)
-
-
-# Product table
-columns = (
-    "ID", "Code", "Name", "Category",
-    "Supplier", "Price", "Stock", "Reorder"
-)
-
-table = ttk.Treeview(
-    root,
-    columns=columns,
-    show="headings"
-)
-
-for col in columns:
-
-    table.heading(col, text=col)
-    table.column(col, width=105)
-
-table.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-
-# Run application
-show_products()
-
-root.mainloop()
-
-conn.close()
+show()
+win.mainloop()
+con.close()
