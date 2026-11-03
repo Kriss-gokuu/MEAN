@@ -1,295 +1,317 @@
-MEAN ALL
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
+import tkinter as tk
+from tkinter import ttk, messagebox
+import sqlite3
+
+# Database connection
+conn = sqlite3.connect("inventory.db")
+cur = conn.cursor()
+
+# Create table
+cur.execute("""
+CREATE TABLE IF NOT EXISTS products (
+    product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_code TEXT UNIQUE NOT NULL,
+    product_name TEXT NOT NULL,
+    category TEXT,
+    supplier TEXT,
+    price REAL,
+    stock INTEGER,
+    reorder_level INTEGER
+)
+""")
+
+conn.commit()
+
+# Main window
+root = tk.Tk()
+root.title("Product Inventory Management")
+root.geometry("950x600")
 
-const app = express();
+# Heading
+tk.Label(
+    root,
+    text="Product Inventory Management System",
+    font=("Arial", 18, "bold")
+).pack(pady=10)
 
-app.use(cors());
-app.use(express.json());
+# Input fields
+fields = [
+    "Product Code",
+    "Product Name",
+    "Category",
+    "Supplier",
+    "Price",
+    "Stock",
+    "Reorder Level"
+]
 
-// MongoDB Connection
-mongoose.connect('mongodb://localhost:27017/BookstoreDB')
-.then(() => console.log("MongoDB Connected"))
-.catch(err => console.log(err));
+entries = {}
 
-// Book Schema
-const bookSchema = new mongoose.Schema({
-    title: String,
-    author: String,
-    price: Number
-});
+form = tk.Frame(root)
+form.pack()
 
-// Collection
-const Book = mongoose.model('Book', bookSchema, 'books');
+for i, field in enumerate(fields):
 
+    tk.Label(form, text=field).grid(
+        row=i, column=0, padx=10, pady=5
+    )
 
-// 1. GET - Display all books
-app.get('/books', async (req, res) => {
-    try {
-        const books = await Book.find();
+    entry = tk.Entry(form)
+    entry.grid(row=i, column=1, padx=10, pady=5)
 
-        res.json(books);
+    entries[field] = entry
 
-    } catch (error) {
-        res.status(500).send(error.message);
-    }
-});
 
+# Get input values
+def get_values():
 
-// 2. POST - Add new book
-app.post('/books', async (req, res) => {
-    try {
-        const book = new Book(req.body);
+    return (
+        entries["Product Code"].get(),
+        entries["Product Name"].get(),
+        entries["Category"].get(),
+        entries["Supplier"].get(),
+        float(entries["Price"].get()),
+        int(entries["Stock"].get()),
+        int(entries["Reorder Level"].get())
+    )
 
-        await book.save();
 
-        res.send("Book Added Successfully");
+# Clear fields
+def clear():
 
-    } catch (error) {
-        res.status(400).send(error.message);
-    }
-});
+    for entry in entries.values():
+        entry.delete(0, tk.END)
 
 
-// 3. PUT - Update book by ID
-app.put('/books/:id', async (req, res) => {
-    try {
-        const book = await Book.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        );
+# Insert product
+def add_product():
 
-        if (!book) {
-            return res.status(404).send("Book Not Found");
-        }
+    try:
 
-        res.json({
-            message: "Book Updated Successfully",
-            book: book
-        });
+        values = get_values()
 
-    } catch (error) {
-        res.status(400).send(error.message);
-    }
-});
+        cur.execute("""
+        INSERT INTO products
+        (product_code, product_name, category,
+         supplier, price, stock, reorder_level)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, values)
 
+        conn.commit()
 
-// 4. DELETE - Delete book by ID
-app.delete('/books/:id', async (req, res) => {
-    try {
-        const book = await Book.findByIdAndDelete(req.params.id);
+        messagebox.showinfo(
+            "Success",
+            "Product Added Successfully"
+        )
 
-        if (!book) {
-            return res.status(404).send("Book Not Found");
-        }
+        clear()
+        show_products()
 
-        res.send("Book Deleted Successfully");
+    except sqlite3.IntegrityError:
+        messagebox.showerror(
+            "Error",
+            "Product Code Already Exists"
+        )
 
-    } catch (error) {
-        res.status(400).send(error.message);
-    }
-});
+    except ValueError:
+        messagebox.showerror(
+            "Error",
+            "Enter Valid Price and Stock Values"
+        )
 
 
-// Start Server
-app.listen(3000, () => {
-    console.log("Server running on port 3000");
-});
+# Display products
+def show_products():
 
+    for row in table.get_children():
+        table.delete(row)
 
-HTML
+    cur.execute("SELECT * FROM products")
 
-<!DOCTYPE html>
-<html ng-app="bookApp">
+    for row in cur.fetchall():
+        table.insert("", tk.END, values=row)
 
-<head>
-    <title>Bookstore Management</title>
 
-    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.2/angular.min.js"></script>
+# Delete product
+def delete_product():
 
-</head>
+    selected = table.selection()
 
-<body ng-controller="bookCtrl">
+    if not selected:
+        messagebox.showwarning(
+            "Warning",
+            "Select a product first"
+        )
+        return
 
-    <h2>Bookstore Inventory Management</h2>
+    item = table.item(selected[0])
+    product_id = item["values"][0]
 
-    <hr>
+    cur.execute(
+        "DELETE FROM products WHERE product_id=?",
+        (product_id,)
+    )
 
-    <h3>Add / Update Book</h3>
+    conn.commit()
 
-    Title:
-    <input type="text" ng-model="book.title">
-    <br><br>
+    messagebox.showinfo(
+        "Success",
+        "Product Deleted Successfully"
+    )
 
-    Author:
-    <input type="text" ng-model="book.author">
-    <br><br>
+    show_products()
+    clear()
 
-    Price:
-    <input type="number" ng-model="book.price">
-    <br><br>
 
-    <button ng-click="addBook()" ng-if="!book._id">
-        Add Book
-    </button>
+# Search product
+def search_product():
 
-    <button ng-click="updateBook()" ng-if="book._id">
-        Update Book
-    </button>
+    keyword = search_entry.get()
 
-    <button ng-click="clearForm()">
-        Clear
-    </button>
+    for row in table.get_children():
+        table.delete(row)
 
-    <hr>
+    cur.execute("""
+    SELECT * FROM products
+    WHERE product_code LIKE ?
+    OR product_name LIKE ?
+    """, ('%' + keyword + '%', '%' + keyword + '%'))
 
-    <h3>Book List</h3>
+    for row in cur.fetchall():
+        table.insert("", tk.END, values=row)
 
-    <button ng-click="getBooks()">
-        Load Books
-    </button>
 
-    <br><br>
+# Update product
+def update_product():
 
-    <table border="1" cellpadding="10">
+    selected = table.selection()
 
-        <tr>
-            <th>ID</th>
-            <th>Title</th>
-            <th>Author</th>
-            <th>Price</th>
-            <th>Action</th>
-        </tr>
+    if not selected:
+        messagebox.showwarning(
+            "Warning",
+            "Select a product first"
+        )
+        return
 
-        <tr ng-repeat="b in books">
+    try:
 
-            <td>{{b._id}}</td>
-            <td>{{b.title}}</td>
-            <td>{{b.author}}</td>
-            <td>{{b.price}}</td>
+        values = get_values()
 
-            <td>
-                <button ng-click="editBook(b)">
-                    Edit
-                </button>
+        item = table.item(selected[0])
+        product_id = item["values"][0]
 
-                <button ng-click="deleteBook(b._id)">
-                    Delete
-                </button>
-            </td>
+        cur.execute("""
+        UPDATE products SET
+        product_code=?,
+        product_name=?,
+        category=?,
+        supplier=?,
+        price=?,
+        stock=?,
+        reorder_level=?
+        WHERE product_id=?
+        """, values + (product_id,))
 
-        </tr>
+        conn.commit()
 
-    </table>
+        messagebox.showinfo(
+            "Success",
+            "Product Updated Successfully"
+        )
 
+        clear()
+        show_products()
 
-    <script>
+    except sqlite3.IntegrityError:
+        messagebox.showerror(
+            "Error",
+            "Product Code Already Exists"
+        )
 
-    var app = angular.module('bookApp', []);
+    except ValueError:
+        messagebox.showerror(
+            "Error",
+            "Enter Valid Numeric Values"
+        )
 
-    app.controller('bookCtrl', function($scope, $http) {
 
-        $scope.books = [];
+# Search section
+search_frame = tk.Frame(root)
+search_frame.pack(pady=10)
 
-        $scope.book = {};
+tk.Label(
+    search_frame,
+    text="Search Product:"
+).pack(side=tk.LEFT)
 
+search_entry = tk.Entry(search_frame)
+search_entry.pack(side=tk.LEFT, padx=5)
 
-        // GET - Display Books
-        $scope.getBooks = function() {
+tk.Button(
+    search_frame,
+    text="Search",
+    command=search_product
+).pack(side=tk.LEFT)
 
-            $http.get('http://localhost:3000/books')
+tk.Button(
+    search_frame,
+    text="Show All",
+    command=show_products
+).pack(side=tk.LEFT, padx=5)
 
-            .then(function(response) {
 
-                $scope.books = response.data;
+# Buttons
+button_frame = tk.Frame(root)
+button_frame.pack(pady=10)
 
-            });
+tk.Button(
+    button_frame,
+    text="Add Product",
+    command=add_product
+).pack(side=tk.LEFT, padx=5)
 
-        };
+tk.Button(
+    button_frame,
+    text="Update Product",
+    command=update_product
+).pack(side=tk.LEFT, padx=5)
 
+tk.Button(
+    button_frame,
+    text="Delete Product",
+    command=delete_product
+).pack(side=tk.LEFT, padx=5)
 
-        // POST - Add Book
-        $scope.addBook = function() {
+tk.Button(
+    button_frame,
+    text="Clear",
+    command=clear
+).pack(side=tk.LEFT, padx=5)
 
-            $http.post(
-                'http://localhost:3000/books',
-                $scope.book
-            )
 
-            .then(function(response) {
+# Product table
+columns = (
+    "ID", "Code", "Name", "Category",
+    "Supplier", "Price", "Stock", "Reorder"
+)
 
-                alert("Book Added Successfully");
+table = ttk.Treeview(
+    root,
+    columns=columns,
+    show="headings"
+)
 
-                $scope.clearForm();
-                $scope.getBooks();
+for col in columns:
 
-            });
+    table.heading(col, text=col)
+    table.column(col, width=105)
 
-        };
+table.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
 
-        // Select Book for Update
-        $scope.editBook = function(b) {
+# Run application
+show_products()
 
-            $scope.book = angular.copy(b);
+root.mainloop()
 
-        };
-
-
-        // PUT - Update Book
-        $scope.updateBook = function() {
-
-            $http.put(
-                'http://localhost:3000/books/' + $scope.book._id,
-                $scope.book
-            )
-
-            .then(function(response) {
-
-                alert("Book Updated Successfully");
-
-                $scope.clearForm();
-                $scope.getBooks();
-
-            });
-
-        };
-
-
-        // DELETE - Delete Book
-        $scope.deleteBook = function(id) {
-
-            $http.delete(
-                'http://localhost:3000/books/' + id
-            )
-
-            .then(function(response) {
-
-                alert("Book Deleted Successfully");
-
-                $scope.getBooks();
-
-            });
-
-        };
-
-
-        // Clear Form
-        $scope.clearForm = function() {
-
-            $scope.book = {};
-
-        };
-
-
-        // Load Books Automatically
-        $scope.getBooks();
-
-    });
-
-    </script>
-
-</body>
-</html>
+conn.close()
